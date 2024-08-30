@@ -10,25 +10,32 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.util.*
 
-data class SensorData(val warehouseId: String, val sensorId: String, val value: Int)
-
 class WarehouseService(
     private val warehouseId: String,
     private val udpPorts: List<Int>,
     private val kafkaBootstrapServers: String,
     private val noSensorDataTimeout: Long
 ) {
-//    private val producer: KafkaProducer<String, String>
+    private val sensorDataProducer: KafkaProducer<String, SensorData>
+    private val warningProducer: KafkaProducer<String, WarningMessage>
     private val lastReceivedTimeMap = mutableMapOf<Int, Long>()
+    private val version = 1  // Set the version for all messages
 
-//    init {
-//        val props = Properties().apply {
-//            put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers)
-//            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
-//            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
-//        }
-//        producer = KafkaProducer(props)
-//    }
+    init {
+        val props = Properties().apply {
+            put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers)
+            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, SensorDataSerializer::class.java.name)
+        }
+        sensorDataProducer = KafkaProducer(props)
+
+        val warningProps = Properties().apply {
+            put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers)
+            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, WarningMessageSerializer::class.java.name)
+        }
+        warningProducer = KafkaProducer(warningProps)
+    }
 
     fun startListening() = runBlocking {
         udpPorts.forEach { port ->
@@ -62,37 +69,46 @@ class WarehouseService(
     }
 
     private fun processMessage(message: String, port: Int) {
-        val regex = Regex("""sensor_id=(\w+),\s*value=(-?\d+)""")
+        val regex = Regex("""sensor_id=(\w+),\s*value=(-?\d+(\.\d+)?)""")
         val matchResult = regex.find(message)
 
         if (matchResult != null) {
             lastReceivedTimeMap[port] = System.currentTimeMillis() // Update last received time for this port
             val sensorId = matchResult.groupValues[1]
-            val value = matchResult.groupValues[2].toInt()
-            val sensorData = SensorData(warehouseId, sensorId, value)
-            sendToKafka(sensorData)
+            val value = matchResult.groupValues[2].toDouble()
+            val sensorData = SensorData(warehouseId, sensorId, value, version)
+            sendSensorDataToKafka(sensorData)
         } else {
             println("Invalid message format: $message")
         }
     }
 
-    private fun sendToKafka(sensorData: SensorData) {
-        val dataString = "${sensorData.warehouseId},${sensorData.sensorId},${sensorData.value}"
+    private fun sendSensorDataToKafka(sensorData: SensorData) {
         val key = "${sensorData.warehouseId}:${sensorData.sensorId}"
-//        producer.send(ProducerRecord("sensors", key, dataString))
-        println("Sent to Kafka: $key -> $dataString")
+        sensorDataProducer.send(ProducerRecord("sensors", key, sensorData))
+        println("Sent to Kafka: $key -> $sensorData")
     }
 
     private fun checkForTimeouts() {
         val currentTime = System.currentTimeMillis()
         lastReceivedTimeMap.forEach { (port, lastReceivedTime) ->
             if (currentTime - lastReceivedTime > noSensorDataTimeout) {
-                val warningMessage = "WARNING: No sensor data received on port $port for $noSensorDataTimeout ms in warehouse $warehouseId"
-//                producer.send(ProducerRecord("sensors", "$warehouseId:WARNING:$port", warningMessage))
-                println(warningMessage)
+                val warningMessage = WarningMessage(
+                    warehouseId,
+                    port,
+                    "WARNING: No sensor data received on port $port for $noSensorDataTimeout ms in warehouse $warehouseId",
+                    version
+                )
+                sendWarningToKafka(warningMessage)
                 lastReceivedTimeMap[port] = currentTime // Reset the timer to prevent continuous warnings
             }
         }
+    }
+
+    private fun sendWarningToKafka(warningMessage: WarningMessage) {
+        val key = "${warningMessage.warehouseId}:${warningMessage.port}"
+        warningProducer.send(ProducerRecord("sensor-warnings", key, warningMessage))
+        println("Sent warning to Kafka: $key -> $warningMessage")
     }
 }
 
