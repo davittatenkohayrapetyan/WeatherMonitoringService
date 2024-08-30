@@ -21,7 +21,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  warehouse-service-1:
+  small-warehouse:
     build:
       context: .
       dockerfile: warehouse-service/Dockerfile
@@ -29,9 +29,10 @@ services:
       - "3344:3344/udp"
       - "3355:3355/udp"
     environment:
-      WAREHOUSE_ID: "warehouse-1"
+      WAREHOUSE_ID: "small-warehouse"
       KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       NO_SENSOR_DATA_TIMEOUT: 60000
+      WAREHOUSE_PORTS: 3344,3355
     depends_on:
       - kafka
 
@@ -47,7 +48,7 @@ services:
     depends_on:
       - kafka
 
-  warehouse-service-2:
+  big-warehouse:
     build:
       context: .
       dockerfile: warehouse-service/Dockerfile
@@ -55,8 +56,23 @@ services:
       - "3366:3366/udp"
       - "3377:3377/udp"
     environment:
-      WAREHOUSE_ID: "warehouse-2"
+      WAREHOUSE_ID: "big-warehouse"
       KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       NO_SENSOR_DATA_TIMEOUT: 60000
+      WAREHOUSE_PORTS: 3344,3355,3366,3377
+    depends_on:
+      - kafka
+    
+  failing-warehouse:
+    build:
+      context: .
+      dockerfile: warehouse-service/Dockerfile
+    ports:
+      - "3388:3344/udp"
+    environment:
+      WAREHOUSE_ID: "failing-warehouse"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      NO_SENSOR_DATA_TIMEOUT: 60000
+      WAREHOUSE_PORTS: 3344
     depends_on:
       - kafka

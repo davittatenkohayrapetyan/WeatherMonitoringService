@@ -16,9 +16,11 @@ COPY warehouse-service/build/libs/warehouse-service-${VERSION}.jar warehouse-ser
 ENV WAREHOUSE_ID="default-warehouse"
 ENV KAFKA_BOOTSTRAP_SERVERS="kafka:9092"
 ENV NO_SENSOR_DATA_TIMEOUT=60000
+ENV WAREHOUSE_PORTS=3344,3355
 
 # Specify the entry point for the container, allowing configurable arguments
 ENTRYPOINT sh -c 'java -jar warehouse-service.jar \
             --warehouse.id=${WAREHOUSE_ID} \
             --kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS} \
-            --timeout.no-sensor-data=${NO_SENSOR_DATA_TIMEOUT}'
+            --timeout.no-sensor-data=${NO_SENSOR_DATA_TIMEOUT} \
+            --warehouse.ports=${WAREHOUSE_PORTS}' 

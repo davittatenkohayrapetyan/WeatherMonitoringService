@@ -10,6 +10,8 @@ import reactor.core.publisher.Flux
 import reactor.kafka.receiver.KafkaReceiver
 import reactor.kafka.receiver.ReceiverOptions
 import reactor.kafka.receiver.ReceiverRecord
+import reactor.core.publisher.Mono
+import java.util.concurrent.ConcurrentHashMap
 
 class CentralMonitoringService(config: Config) {
     private val objectMapper = jacksonObjectMapper()
@@ -20,6 +22,7 @@ class CentralMonitoringService(config: Config) {
     private val autoOffsetReset = config.getString("kafka.auto-offset-reset")
     private val sensorTopics = config.getStringList("sensor-topics")
     private val warningTopics = config.getStringList("warning-topics")
+    private val monitoringInterval = config.getDuration("monitoring.interval")
 
     private val thresholds = config.getConfig("thresholds")
 
@@ -41,9 +44,12 @@ class CentralMonitoringService(config: Config) {
         .withValueDeserializer(StringDeserializer())
         .subscription(warningTopics)
 
+    private val lastMessageTimes = ConcurrentHashMap<String, Long>()
+
     fun monitor() {
         monitorSensors()
         monitorWarnings()
+        startWarehouseTimeoutMonitor()
     }
 
     private fun monitorSensors() {
@@ -52,6 +58,7 @@ class CentralMonitoringService(config: Config) {
         sensorFlux.map { record ->
             objectMapper.readValue<SensorData>(record.value())
         }.subscribe { sensorData ->
+            lastMessageTimes[sensorData.warehouseId] = System.currentTimeMillis()
             checkThreshold(sensorData)
         }
     }
@@ -62,8 +69,27 @@ class CentralMonitoringService(config: Config) {
         warningFlux.map { record ->
             objectMapper.readValue<WarningMessage>(record.value())
         }.subscribe { warningMessage ->
+            lastMessageTimes[warningMessage.warehouseId] = System.currentTimeMillis()
             processWarning(warningMessage)
         }
+    }
+
+    private fun startWarehouseTimeoutMonitor() {
+        Flux.interval(monitoringInterval)
+            .flatMap {
+                Mono.fromCallable {
+                    val currentTime = System.currentTimeMillis()
+                    lastMessageTimes.entries.filter { entry ->
+                        currentTime - entry.value > monitoringInterval.toMillis()
+                    }
+                }
+            }
+            .doOnNext { silentWarehouses ->
+                silentWarehouses.forEach { warehouseEntry ->
+                    println("WARNING: No data received from warehouse ${warehouseEntry.key} for over ${monitoringInterval.toMinutes()} minutes")
+                }
+            }
+            .subscribe()
     }
 
     private fun checkThreshold(sensorData: SensorData) {

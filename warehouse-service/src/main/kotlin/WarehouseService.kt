@@ -117,12 +117,14 @@ class WarehouseService(
 }
 
 fun main(args: Array<String>) {
-    val config = ConfigFactory.parseResources("application.conf");
+    val config = ConfigFactory.parseResources("application.conf")
 
-    val warehouseId = config.getString("warehouse.id")
-    val udpPorts = config.getIntList("warehouse.ports").map { it.toInt() }
-    val kafkaBootstrapServers = config.getString("kafka.bootstrap-servers")
-    val noSensorDataTimeout = config.getLong("timeout.no-sensor-data")
+    val warehouseId = System.getenv("WAREHOUSE_ID") ?: config.getString("warehouse.id")
+    val udpPorts = System.getenv("WAREHOUSE_PORTS")?.split(",")?.map { it.toInt() }
+        ?: config.getIntList("warehouse.ports").map { it.toInt() }
+    val kafkaBootstrapServers = System.getenv("KAFKA_BOOTSTRAP_SERVERS") ?: config.getString("kafka.bootstrap-servers")
+    val noSensorDataTimeout = System.getenv("NO_SENSOR_DATA_TIMEOUT")?.toLong()
+        ?: config.getLong("timeout.no-sensor-data")
 
     val logger = LoggerFactory.getLogger("Main")
 
