@@ -1,21 +1,17 @@
 package com.davithayrapetyan.weathermonitoring
 
-import akka.actor.ActorSystem
-import akka.kafka.ConsumerSettings
-import akka.kafka.Subscriptions
-import akka.kafka.javadsl.Consumer
-import akka.stream.Materializer
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import org.apache.kafka.common.serialization.StringDeserializer
-import akka.stream.javadsl.Sink
-import akka.stream.javadsl.Source
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.serialization.StringDeserializer
+import reactor.core.publisher.Flux
+import reactor.kafka.receiver.KafkaReceiver
+import reactor.kafka.receiver.ReceiverOptions
+import reactor.kafka.receiver.ReceiverRecord
 
-class CentralMonitoringService(system: ActorSystem, config: Config) {
+class CentralMonitoringService(config: Config) {
     private val objectMapper = jacksonObjectMapper()
 
     private val kafkaBootstrapServers = config.getString("kafka.bootstrap-servers")
@@ -27,18 +23,23 @@ class CentralMonitoringService(system: ActorSystem, config: Config) {
 
     private val thresholds = config.getConfig("thresholds")
 
-    // The materializer is now implicitly derived from the ActorSystem.
-    private val materializer: Materializer = Materializer.createMaterializer(system)
+    private val sensorReceiverOptions = ReceiverOptions.create<String, String>(mapOf(
+        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to kafkaBootstrapServers,
+        ConsumerConfig.GROUP_ID_CONFIG to groupIdSensors,
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to autoOffsetReset
+    ))
+        .withKeyDeserializer(StringDeserializer())
+        .withValueDeserializer(StringDeserializer())
+        .subscription(sensorTopics)
 
-    private val sensorConsumerSettings = ConsumerSettings.create(system, StringDeserializer(), StringDeserializer())
-        .withBootstrapServers(kafkaBootstrapServers)
-        .withGroupId(groupIdSensors)
-        .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
-
-    private val warningConsumerSettings = ConsumerSettings.create(system, StringDeserializer(), StringDeserializer())
-        .withBootstrapServers(kafkaBootstrapServers)
-        .withGroupId(groupIdWarnings)
-        .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
+    private val warningReceiverOptions = ReceiverOptions.create<String, String>(mapOf(
+        ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to kafkaBootstrapServers,
+        ConsumerConfig.GROUP_ID_CONFIG to groupIdWarnings,
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to autoOffsetReset
+    ))
+        .withKeyDeserializer(StringDeserializer())
+        .withValueDeserializer(StringDeserializer())
+        .subscription(warningTopics)
 
     fun monitor() {
         monitorSensors()
@@ -46,27 +47,23 @@ class CentralMonitoringService(system: ActorSystem, config: Config) {
     }
 
     private fun monitorSensors() {
-        val sensorSource: Source<ConsumerRecord<String, String>, Consumer.Control> = Consumer.plainSource(
-            sensorConsumerSettings, Subscriptions.topics(*sensorTopics.toTypedArray())
-        )
+        val sensorFlux: Flux<ReceiverRecord<String, String>> = KafkaReceiver.create(sensorReceiverOptions).receive()
 
-        sensorSource.map { record ->
+        sensorFlux.map { record ->
             objectMapper.readValue<SensorData>(record.value())
-        }.runWith(Sink.foreach { sensorData ->
+        }.subscribe { sensorData ->
             checkThreshold(sensorData)
-        }, materializer)
+        }
     }
 
     private fun monitorWarnings() {
-        val warningSource: Source<ConsumerRecord<String, String>, Consumer.Control> = Consumer.plainSource(
-            warningConsumerSettings, Subscriptions.topics(*warningTopics.toTypedArray())
-        )
+        val warningFlux: Flux<ReceiverRecord<String, String>> = KafkaReceiver.create(warningReceiverOptions).receive()
 
-        warningSource.map { record ->
+        warningFlux.map { record ->
             objectMapper.readValue<WarningMessage>(record.value())
-        }.runWith(Sink.foreach { warningMessage ->
+        }.subscribe { warningMessage ->
             processWarning(warningMessage)
-        }, materializer)
+        }
     }
 
     private fun checkThreshold(sensorData: SensorData) {
@@ -93,15 +90,8 @@ class CentralMonitoringService(system: ActorSystem, config: Config) {
 }
 
 fun main(args: Array<String>) {
-    val system = ActorSystem.create("CentralMonitoringSystem")
+    val config = ConfigFactory.load()
 
-    // Load configuration with fallback to application.conf
-    val config = if (args.isNotEmpty()) {
-        ConfigFactory.parseString(args.joinToString(",")).withFallback(ConfigFactory.load())
-    } else {
-        ConfigFactory.load()
-    }
-
-    val monitoringService = CentralMonitoringService(system, config)
+    val monitoringService = CentralMonitoringService(config)
     monitoringService.monitor()
 }

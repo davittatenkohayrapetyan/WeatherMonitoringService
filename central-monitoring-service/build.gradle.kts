@@ -11,13 +11,16 @@ dependencies {
     implementation(project(":common"))
     implementation("org.apache.kafka:kafka-clients:3.2.0")
     implementation("org.apache.kafka:kafka-streams:3.2.0")
-    implementation("com.typesafe.akka:akka-stream-kafka_2.13:3.0.1")
-    implementation("com.typesafe.akka:akka-stream_2.13:2.6.19")
-    implementation("com.typesafe.akka:akka-actor-typed_2.13:2.6.19")
-    implementation("com.typesafe.akka:akka-serialization-jackson_2.13:2.6.19")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.15.0")
     implementation("com.typesafe:config:1.4.2")
+    implementation("org.slf4j:slf4j-api:2.0.7")
+
+    // Reactor Kafka dependency
+    implementation("io.projectreactor.kafka:reactor-kafka:1.3.11")
+
+    // Reactor Core dependency
+    implementation("io.projectreactor:reactor-core:3.5.7")
 }
 
 application {

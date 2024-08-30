@@ -6,6 +6,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
+import org.slf4j.LoggerFactory
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.util.*
@@ -20,6 +21,9 @@ class WarehouseService(
     private val warningProducer: KafkaProducer<String, WarningMessage>
     private val lastReceivedTimeMap = mutableMapOf<Int, Long>()
     private val version = 1  // Set the version for all messages
+
+    // Initialize SLF4J logger
+    private val logger = LoggerFactory.getLogger(WarehouseService::class.java)
 
     init {
         val props = Properties().apply {
@@ -58,7 +62,7 @@ class WarehouseService(
         val socket = DatagramSocket(port)
         val buffer = ByteArray(1024)
 
-        println("Listening on UDP port $port")
+        logger.info("Listening on UDP port $port")
 
         while (true) {
             val packet = DatagramPacket(buffer, buffer.size)
@@ -79,14 +83,14 @@ class WarehouseService(
             val sensorData = SensorData(warehouseId, sensorId, value, version)
             sendSensorDataToKafka(sensorData)
         } else {
-            println("Invalid message format: $message")
+            logger.warn("Invalid message format: $message")
         }
     }
 
     private fun sendSensorDataToKafka(sensorData: SensorData) {
         val key = "${sensorData.warehouseId}:${sensorData.sensorId}"
         sensorDataProducer.send(ProducerRecord("sensors", key, sensorData))
-        println("Sent to Kafka: $key -> $sensorData")
+        logger.info("Sent to Kafka: $key -> $sensorData")
     }
 
     private fun checkForTimeouts() {
@@ -108,20 +112,21 @@ class WarehouseService(
     private fun sendWarningToKafka(warningMessage: WarningMessage) {
         val key = "${warningMessage.warehouseId}:${warningMessage.port}"
         warningProducer.send(ProducerRecord("sensor-warnings", key, warningMessage))
-        println("Sent warning to Kafka: $key -> $warningMessage")
+        logger.warn("Sent warning to Kafka: $key -> $warningMessage")
     }
 }
 
 fun main(args: Array<String>) {
-    val config = ConfigFactory.load()
+    val config = ConfigFactory.parseResources("application.conf");
 
-    val warehouseId = args.getOrNull(0) ?: config.getString("warehouse.id")
-    val udpPorts = args.getOrNull(1)?.split(",")?.map { it.toInt() }
-        ?: config.getIntList("warehouse.ports").map { it.toInt() }
-    val kafkaBootstrapServers = args.getOrNull(2) ?: config.getString("kafka.bootstrap-servers")
-    val noSensorDataTimeout = args.getOrNull(3)?.toLong() ?: config.getLong("timeout.no-sensor-data")
+    val warehouseId = config.getString("warehouse.id")
+    val udpPorts = config.getIntList("warehouse.ports").map { it.toInt() }
+    val kafkaBootstrapServers = config.getString("kafka.bootstrap-servers")
+    val noSensorDataTimeout = config.getLong("timeout.no-sensor-data")
 
-    println("Starting WarehouseService with warehouseId: $warehouseId, ports: $udpPorts, Kafka: $kafkaBootstrapServers")
+    val logger = LoggerFactory.getLogger("Main")
+
+    logger.info("Starting WarehouseService with warehouseId: $warehouseId, ports: $udpPorts, Kafka: $kafkaBootstrapServers")
 
     val warehouseService = WarehouseService(warehouseId, udpPorts, kafkaBootstrapServers, noSensorDataTimeout)
     warehouseService.startListening()
