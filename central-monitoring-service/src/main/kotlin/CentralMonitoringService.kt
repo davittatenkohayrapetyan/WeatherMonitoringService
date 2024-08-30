@@ -4,7 +4,6 @@ import akka.actor.ActorSystem
 import akka.kafka.ConsumerSettings
 import akka.kafka.Subscriptions
 import akka.kafka.javadsl.Consumer
-import akka.stream.ActorMaterializer
 import akka.stream.Materializer
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -28,7 +27,8 @@ class CentralMonitoringService(system: ActorSystem, config: Config) {
 
     private val thresholds = config.getConfig("thresholds")
 
-    private val materializer: Materializer = ActorMaterializer.create(system)
+    // The materializer is now implicitly derived from the ActorSystem.
+    private val materializer: Materializer = Materializer.createMaterializer(system)
 
     private val sensorConsumerSettings = ConsumerSettings.create(system, StringDeserializer(), StringDeserializer())
         .withBootstrapServers(kafkaBootstrapServers)
@@ -56,7 +56,6 @@ class CentralMonitoringService(system: ActorSystem, config: Config) {
             checkThreshold(sensorData)
         }, materializer)
     }
-
 
     private fun monitorWarnings() {
         val warningSource: Source<ConsumerRecord<String, String>, Consumer.Control> = Consumer.plainSource(
