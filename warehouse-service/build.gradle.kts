@@ -6,6 +6,8 @@ plugins {
 dependencies {
     implementation(project(":common"))
     implementation("org.apache.kafka:kafka-clients:3.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1")
+    implementation("com.typesafe:config:1.4.2")
 }
 
 application {
