@@ -151,7 +151,3 @@ To extend the service, you can modify or add the following components:
 - **Thresholds**: Define new thresholds in the configuration for additional sensor types.
 - **Warning Processing**: Customize the handling of warning messages in the `processWarning` method.
 - **Monitoring Logic**: Adjust the monitoring interval and add custom checks in the `startWarehouseTimeoutMonitor` method.
-
-## Contributing
-
-Contributions are welcome. Please submit a pull request or open an issue on the GitHub repository.
