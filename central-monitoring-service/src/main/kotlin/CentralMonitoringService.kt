@@ -1,5 +1,6 @@
 package com.davithayrapetyan.weathermonitoring
 
+import com.davithayrapetyan.weathermonitoring.threshold.ThresholdCheckerFactory
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.typesafe.config.Config
@@ -25,6 +26,7 @@ class CentralMonitoringService(config: Config) {
     private val monitoringInterval = config.getDuration("monitoring.interval")
 
     private val thresholds = config.getConfig("thresholds")
+    private val thresholdCheckerFactory = ThresholdCheckerFactory(thresholds)
 
     private val sensorReceiverOptions = ReceiverOptions.create<String, String>(mapOf(
         ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to kafkaBootstrapServers,
@@ -59,7 +61,12 @@ class CentralMonitoringService(config: Config) {
             objectMapper.readValue<SensorData>(record.value())
         }.subscribe { sensorData ->
             lastMessageTimes[sensorData.warehouseId] = System.currentTimeMillis()
-            checkThreshold(sensorData)
+            val checker = thresholdCheckerFactory.create(sensorData.sensorId)
+            if (checker?.check(sensorData) == true) {
+                println("ALARM: ${sensorData.warehouseId} - ${sensorData.sensorId} exceeded threshold with value ${sensorData.value}")
+            } else {
+                println("ERROR: No threshold checker found or threshold not exceeded for sensor ID: ${sensorData.sensorId}")
+            }
         }
     }
 
@@ -92,30 +99,12 @@ class CentralMonitoringService(config: Config) {
             .subscribe()
     }
 
-    private fun checkThreshold(sensorData: SensorData) {
-        val thresholdEntry = thresholds.root().entries.find {
-            val config = thresholds.getConfig(it.key)
-            val prefixPattern = config.getString("prefix").toRegex()
-            prefixPattern.containsMatchIn(sensorData.sensorId)
-        }
-
-        if (thresholdEntry != null) {
-            val config = thresholds.getConfig(thresholdEntry.key)
-            val thresholdValue = config.getDouble("value")
-            if (sensorData.value > thresholdValue) {
-                println("ALARM: ${sensorData.warehouseId} - ${sensorData.sensorId} exceeded threshold with value ${sensorData.value}")
-            }
-        } else {
-            println("No threshold configured for sensor ID: ${sensorData.sensorId}")
-        }
-    }
-
     private fun processWarning(warningMessage: WarningMessage) {
         println("WARNING: ${warningMessage.warehouseId} - Port ${warningMessage.port} reported: ${warningMessage.message}")
     }
 }
 
-fun main(args: Array<String>) {
+fun main() {
     val config = ConfigFactory.load()
 
     val monitoringService = CentralMonitoringService(config)

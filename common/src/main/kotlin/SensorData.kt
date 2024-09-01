@@ -13,7 +13,11 @@ class SensorDataSerializer : Serializer<SensorData> {
     private val objectMapper = jacksonObjectMapper()
 
     override fun serialize(topic: String, data: SensorData?): ByteArray? {
-        return objectMapper.writeValueAsBytes(data)
+        return if (data == null) {
+            null
+        } else {
+            objectMapper.writeValueAsBytes(data)
+        }
     }
 }
 
@@ -22,7 +26,11 @@ class WarningMessageSerializer : Serializer<WarningMessage> {
     private val objectMapper = jacksonObjectMapper()
 
     override fun serialize(topic: String, data: WarningMessage?): ByteArray? {
-        return objectMapper.writeValueAsBytes(data)
+        return if (data == null) {
+            null
+        } else {
+            objectMapper.writeValueAsBytes(data)
+        }
     }
 }
 
@@ -33,7 +41,6 @@ class SensorDataDeserializer : Deserializer<SensorData> {
     override fun deserialize(topic: String, data: ByteArray?): SensorData? {
         return data?.let { objectMapper.readValue(it, SensorData::class.java) }
     }
-
 }
 
 // Custom deserializer (if needed) for WarningMessage
@@ -43,5 +50,4 @@ class WarningMessageDeserializer : Deserializer<WarningMessage> {
     override fun deserialize(topic: String, data: ByteArray?): WarningMessage? {
         return data?.let { objectMapper.readValue(it, WarningMessage::class.java) }
     }
-
 }

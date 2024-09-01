@@ -116,7 +116,7 @@ class WarehouseService(
     }
 }
 
-fun main(args: Array<String>) {
+fun main() {
     val config = ConfigFactory.parseResources("application.conf")
 
     val warehouseId = System.getenv("WAREHOUSE_ID") ?: config.getString("warehouse.id")

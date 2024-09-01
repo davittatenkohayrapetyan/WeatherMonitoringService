@@ -116,5 +116,5 @@ The service uses SLF4J with the default logging configuration. Logs are output t
 
 To extend the service, you can modify or add the following components:
 
-- **Timeout Logic**: Customize the timeout logic in the `checkForTimeouts` method.
+- **Timeout Logic**: Customize the timeout threshold in the `checkForTimeouts` method.
 - **Sensor Data Processing**: Modify how sensor data is processed in the `processMessage` method.

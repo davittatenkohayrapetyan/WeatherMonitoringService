@@ -21,8 +21,13 @@ dependencies {
 
     // Reactor Core dependency
     implementation("io.projectreactor:reactor-core:3.5.7")
-}
+    
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.3")
+    testImplementation("org.mockito:mockito-core:5.4.0")
+    testImplementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
 
+}
 application {
     mainClass.set("com.davithayrapetyan.weathermonitoring.CentralMonitoringServiceKt")
 }
@@ -39,4 +44,15 @@ tasks.withType<Jar> {
     from({
         configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }
     })
+}
+
+sourceSets {
+    test {
+        kotlin.srcDirs("src/test/kotlin")
+        resources.srcDirs("src/test/resources")
+    }
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
