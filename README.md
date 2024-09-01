@@ -90,7 +90,3 @@ docker-compose down
 
 - The `failing-warehouse` service is configured to simulate a failing warehouse by stopping it manually. This is useful for testing the robustness of the system.
 - You can add more warehouses or modify the existing ones by editing the `docker-compose.yml` file.
-
-## License
-
-This project is licensed under the MIT License.

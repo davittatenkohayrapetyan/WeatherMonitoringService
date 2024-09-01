@@ -155,7 +155,3 @@ To extend the service, you can modify or add the following components:
 ## Contributing
 
 Contributions are welcome. Please submit a pull request or open an issue on the GitHub repository.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
